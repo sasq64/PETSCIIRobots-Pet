@@ -2,9 +2,10 @@
 ;by David Murray 2020 (last update 7-15-2022)
 ;dfwgreencars@gmail.com
 
-!to "petrobots",cbm
+; !to "petrobots",cbm
 
-*=$0401              ;START ADDRESS IS $0401
+
+    !org $0801              ;START ADDRESS IS $0401
 DESTRUCT_PATH	=$5000	;Destruct path array (256 bytes)
 TILE_ATTRIB	=$5100	;Tile attrib array (256 bytes)
 TILE_DATA_TL	=$5200	;Tile character top-left (256 bytes)
@@ -104,32 +105,39 @@ MAP		=$6000	;Location of MAP (8K)
 ;***END OF MAP FILE***
 
 ;*** Zero Page locations used ***
-TILE		=$23	;The tile number to be plotted
-TEMP_X		=$24	;Temporarily used for loops
-TEMP_Y		=$25	;Temporarily used for loops
-MAP_X		=$26	;Current X location on map
-MAP_Y		=$27	;Current Y location on map
-MAP_WINDOW_X	=$28	;Top left location of what is displayed in map window
-MAP_WINDOW_Y	=$29	;Top left location of what is displayed in map window
-DECNUM		=$2A	;a decimal number to be displayed onscreen as 3 digits.
-ATTRIB		=$2B	;Tile attribute value
-UNIT		=$2C	;Current unit being processed
-TEMP_A		=$2D	;used within some routines
-TEMP_B		=$2E	;used within some routines
-TEMP_C		=$2F	;used within some routines
-TEMP_D		=$30	;used within some routines
-CURSOR_X	=$31	;For on-screen cursor
-CURSOR_Y	=$32	;For on-screen cursor
-CURSOR_ON	=$33	;Is cursor active or not? 1=yes 0=no
-REDRAW_WINDOW	=$34	;1=yes 0=no
-MOVE_RESULT	=$35	;1=Move request success, 0=fail.
-UNIT_FIND	=$36	;255=no unit present.
-MOVE_TYPE	=$37	;%00000001=WALK %00000010=HOVER
-PRECALC_COUNT	=$39	;part of screen draw routine
-CUR_PATTERN_L	=$3A	;stores the memory location of the current
-CUR_PATTERN_H	=$3B	;musical pattern being played.
+    !section "zpage", $23, NoStore=true {
+TILE		!ds	;The tile number to be plotted
+TEMP_X		!ds	;Temporarily used for loops
+TEMP_Y		!ds	;Temporarily used for loops
+MAP_X		!ds	;Current X location on map
+MAP_Y		!ds	;Current Y location on map
+MAP_WINDOW_X	!ds	;Top left location of what is displayed in map window
+MAP_WINDOW_Y	!ds	;Top left location of what is displayed in map window
+DECNUM		!ds	;a decimal number to be displayed onscreen as 3 digits.
+ATTRIB		!ds	;Tile attribute value
+UNIT		!ds	;Current unit being processed
+TEMP_A		!ds	;used within some routines
+TEMP_B		!ds	;used within some routines
+TEMP_C		!ds	;used within some routines
+TEMP_D		!ds	;used within some routines
+CURSOR_X	!ds	;For on-screen cursor
+CURSOR_Y	!ds	;For on-screen cursor
+CURSOR_ON	!ds	;Is cursor active or not? 1=yes 0=no
+REDRAW_WINDOW	!ds	;1=yes 0=no
+MOVE_RESULT	!ds	;1=Move request success, 0=fail.
+UNIT_FIND	!ds	;255=no unit present.
+MOVE_TYPE	!ds	;%00000001=WALK %00000010=HOVER
+PRECALC_COUNT	!ds	;part of screen draw routine
+CUR_PATTERN_L	!ds	;stores the memory location of the current
+CUR_PATTERN_H	!ds	;musical pattern being played.
+}
 
-BASIC:	!BYTE $0B,$04,$01,$00,$9E,$31,$30,$33,$37,$00,$00,$00
+BASIC:
+    !byte $0b,$08,$01,$00,$9e,str(PRG_START),$00,$00,$00
+PRG_START:
+    lda #$80
+    sta $d706
+
 	;Adds BASIC line:  1 SYS 1037
 	LDA	#%00101000	;Pins 3 & 5 are output
 	STA	$E843	;Data-direction-register for userport
@@ -296,16 +304,40 @@ DLM3:	LDA	($FB),Y
 	RTS
 LOAD_MSG2:	!SCR"loading map:"
 
+REAL_IRQ:
+    pha
+    txa
+    pha
+    tya
+    pha
+    jmp RUNIRQ
+BACK:
+    ;!log "BACK"
+    pla
+    tay
+    pla
+    tax
+    pla
+    rti
+
+
 SETUP_INTERRUPT:
 	SEI			; Disable interrupt routine
-	LDA	$0090		; get old address
-	STA	IRQ31+1		
-	LDA	$0091		; get old address
-	STA	IRQ31+2	
-	LDA	#<RUNIRQ	; Setup IRQ to visit my routine RUNIRQ before
-	STA	$0090		; doing the usual IRQ routine.
-	LDA	#>RUNIRQ
-	STA	$0091
+	;LDA	$0090		; get old address
+	;STA	IRQ31+1		
+	;LDA	$0091		; get old address
+	;STA	IRQ31+2	
+	;LDA	#<RUNIRQ	; Setup IRQ to visit my routine RUNIRQ before
+	;STA	$0090		; doing the usual IRQ routine.
+	;LDA	#>RUNIRQ
+	;STA	$0091
+
+        LDA #<REAL_IRQ
+        STA $FFFC
+        LDA #>REAL_IRQ
+        STA $FFFD
+        
+
 	CLI			; Reenable routine.
 	RTS
 
@@ -336,7 +368,10 @@ IRQ30:	LDA	BORDER
 	CMP	#0
 	BEQ	IRQ31
 	DEC	BORDER
-IRQ31:	JMP	$E455		; Back to usual IRQ routine
+IRQ31:	
+        JMP     BACK
+
+        ;JMP	$E455		; Back to usual IRQ routine
 BGTIMER1	!BYTE 00
 BGTIMER2	!BYTE 00
 KEYTIMER	!BYTE 00	;Used for repeat of movement
@@ -4619,49 +4654,33 @@ PATTERN_H_TEMP:	!BYTE 00
 DATA_LINE_TEMP:	!BYTE 00
 TEMPO_TEMP:	!BYTE 00
 
-SOUND_LIBRARY_L:
-	!BYTE	<SND_EXPLOSION		;sound 0
-	!BYTE	<SND_EXPLOSION		;sound 1
-	!BYTE	<SND_MEDKIT		;sound 2
-	!BYTE	<SND_EMP		;sound 3
-	!BYTE	<SND_MAGNET		;sound 4
-	!BYTE	<SND_SHOCK		;sound 5
-	!BYTE	<SND_MOVE_OBJ		;sound 6
-	!BYTE	<SND_SHOCK		;sound 7
-	!BYTE	<SND_PLASMA		;sound 8
-	!BYTE	<SND_PISTOL		;sound 9
-	!BYTE	<SND_ITEM_FOUND		;sound 10
-	!BYTE	<SND_ERROR		;sound 11
-	!BYTE	<SND_CYCLE_WEAPON	;sound 12
-	!BYTE	<SND_CYCLE_ITEM		;sound 13
-	!BYTE	<SND_DOOR		;sound 14
-	!BYTE	<SND_MENU_BEEP		;sound 15
-	!BYTE	<SND_SHORT_BEEP		;sound 16
-	!BYTE	<SND_SHORT_BEEP		;sound 17
-	!BYTE	<WIN_MUSIC		;sound 18	
-	!BYTE	<LOSE_MUSIC		;sound 19
+sound_list = [
+     SND_EXPLOSION,
+     SND_EXPLOSION,
+     SND_MEDKIT,
+     SND_EMP,
+     SND_MAGNET,
+     SND_SHOCK,
+     SND_MOVE_OBJ,
+     SND_SHOCK,
+     SND_PLASMA,
+     SND_PISTOL,
+     SND_ITEM_FOUND,
+     SND_ERROR,
+     SND_CYCLE_WEAPON,
+     SND_CYCLE_ITEM,
+     SND_DOOR,
+     SND_MENU_BEEP,
+     SND_SHORT_BEEP,
+     SND_SHORT_BEEP,
+     WIN_MUSIC,
+     LOSE_MUSIC
+]
 
+SOUND_LIBRARY_L:
+    !fill sound_list, [i -> i&0xff]
 SOUND_LIBRARY_H:
-	!BYTE	>SND_EXPLOSION		;sound 0
-	!BYTE	>SND_EXPLOSION		;sound 1
-	!BYTE	>SND_MEDKIT		;sound 2
-	!BYTE	>SND_EMP		;sound 3
-	!BYTE	>SND_MAGNET		;sound 4
-	!BYTE	>SND_SHOCK		;sound 5
-	!BYTE	>SND_MOVE_OBJ		;sound 6
-	!BYTE	>SND_SHOCK		;sound 7
-	!BYTE	>SND_PLASMA		;sound 8
-	!BYTE	>SND_PISTOL		;sound 9
-	!BYTE	>SND_ITEM_FOUND		;sound 10
-	!BYTE	>SND_ERROR		;sound 11
-	!BYTE	>SND_CYCLE_WEAPON	;sound 12
-	!BYTE	>SND_CYCLE_ITEM		;sound 13
-	!BYTE	>SND_DOOR		;sound 14
-	!BYTE	>SND_MENU_BEEP		;sound 15
-	!BYTE	>SND_SHORT_BEEP		;sound 16
-	!BYTE	>SND_SHORT_BEEP		;sound 17
-	!BYTE	>WIN_MUSIC		;sound 18	
-	!BYTE	>LOSE_MUSIC		;sound 19
+    !fill sound_list, [i -> i>>8]
 ;0 explosion
 ;1 small explosion
 ;2 medkit
@@ -4820,7 +4839,7 @@ STSN1:	LDY	PATTERN_L_TEMP
 ;MIN_CHART	!BYTE 00,03,07
 ;SUS4_CHART	!BYTE 00,05,07
 
-!SOURCE "BACKGROUND_TASKS.ASM"
+!include "BACKGROUND_TASKS.ASM"
 
 ;These are the included binary files that contain the screen
 ;image for the main editor.
